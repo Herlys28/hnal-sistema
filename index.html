@@ -276,8 +276,8 @@ document.getElementById("postores").value="";
 
 /* 🔥 GOOGLE SHEETS */
 fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
-method: "POST",
-body: JSON.stringify(actual)
+  method: "GET",
+  cache: "no-store"
 })
 .then(res => res.text())
 .then(data => {
