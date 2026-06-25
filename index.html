@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>HNAL - Sistema PRO Completo</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+
+body{
+margin:0;
+font-family:Segoe UI, Arial;
+background:#eef2f7;
+}
+
+.header{
+background:#002f87;
+color:white;
+padding:16px;
+font-weight:600;
+}
+
+.sub{
+background:#c40000;
+color:white;
+padding:8px 16px;
+font-size:13px;
+}
+
+.container{
+max-width:1200px;
+margin:auto;
+padding:20px;
+}
+
+.card{
+background:white;
+border-radius:12px;
+padding:20px;
+margin-bottom:18px;
+box-shadow:0 4px 14px rgba(0,0,0,.08);
+border-left:5px solid #002f87;
+}
+
+h3{color:#002f87;margin-top:0}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:10px;
+}
+
+input,select{
+padding:10px;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+button{
+padding:10px 14px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+font-weight:600;
+margin-top:10px;
+}
+
+.btn-primary{background:#002f87;color:white}
+.btn-edit{background:#ff9800;color:white}
+.btn-delete{background:#d40000;color:white}
+.btn-pdf{background:#1b8a3b;color:white}
+
+button:hover{opacity:.9}
+
+.result{
+margin-top:15px;
+padding:15px;
+border-radius:10px;
+background:#eaf2ff;
+border-left:5px solid #002f87;
+display:none;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+font-size:13px;
+}
+
+th{
+background:#002f87;
+color:white;
+padding:10px;
+text-align:left;
+}
+
+td{
+padding:10px;
+border-bottom:1px solid #eee;
+}
+
+.actions{
+display:flex;
+gap:6px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+HOSPITAL NACIONAL ARZOBISPO LOAYZA - OFICINA DE LOGÍSTICA / UNIDAD DE PROGRAMACIÓN
+</div>
+
+<div class="sub">
+Sistema de Segmentación Art. 125 - Ley N.° 32069
+</div>
+
+<div class="container">
+
+<!-- FORM -->
+<div class="card">
+
+<h3>Registro de Contratación</h3>
+
+<div class="grid">
+
+<input id="nombre" placeholder="Nombre del procedimiento">
+<select id="tipo">
+<option>Bien</option>
+<option>Servicio</option>
+</select>
+
+<input id="area" placeholder="Área usuaria">
+<input id="monto" type="number" placeholder="Monto contratación">
+<input id="pac" type="number" placeholder="PAC total">
+<input id="postores" type="number" placeholder="Promedio postores">
+
+<select id="desierto">
+<option value="No">Desiertos: No</option>
+<option value="Si">Desiertos: Sí</option>
+</select>
+
+<select id="mercado">
+<option value="No">Mercado limitado: No</option>
+<option value="Si">Mercado limitado: Sí</option>
+</select>
+
+</div>
+
+<button class="btn-primary" onclick="registrar()">Registrar y Analizar</button>
+
+<div id="resultado" class="result"></div>
+
+</div>
+
+<!-- HISTORIAL -->
+<div class="card">
+
+<h3>Historial de Contrataciones</h3>
+
+<div style="margin-bottom:10px;">
+<button class="btn-primary" onclick="exportExcel()" style="background:#1b8a3b;">
+📥 Descargar Excel (CSV)
+</button>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Código</th>
+<th>Procedimiento</th>
+<th>Categoría</th>
+<th>Acciones</th>
+</tr>
+</thead>
+<tbody id="tabla"></tbody>
+</table>
+
+</div>
+
+</div>
+
+<script>
+
+let editIndex=null;
+let actual=null;
+
+/* ID AUTOMÁTICO */
+function generarID(){
+let data=JSON.parse(localStorage.getItem("db")||"[]");
+return "HNAL-2026-"+String(data.length+1).padStart(4,"0");
+}
+
+/* ANALIZAR */
+function analizar(obj){
+
+let pct=(obj.monto/obj.pac)*100;
+
+let cuantia=pct>10?"ALTA CUANTÍA":"BAJA CUANTÍA";
+
+let riesgo="BAJO RIESGO";
+
+let condicion =
+(obj.desierto==="Si") ||
+(obj.mercado==="Si") ||
+(obj.tipo==="Bien" && obj.postores<=3) ||
+(obj.tipo==="Servicio" && obj.postores<=2);
+
+if(condicion) riesgo="ALTO RIESGO";
+
+let categoria="";
+
+if(cuantia==="BAJA CUANTÍA"&&riesgo==="BAJO RIESGO")categoria="RUTINARIO";
+if(cuantia==="ALTA CUANTÍA"&&riesgo==="BAJO RIESGO")categoria="OPERACIONAL";
+if(cuantia==="BAJA CUANTÍA"&&riesgo==="ALTO RIESGO")categoria="CRÍTICO";
+if(cuantia==="ALTA CUANTÍA"&&riesgo==="ALTO RIESGO")categoria="ESTRATÉGICO";
+
+return {...obj,pct,cuantia,riesgo,categoria};
+}
+
+/* REGISTRAR */
+function registrar(){
+
+let nombre=document.getElementById("nombre").value.trim();
+let tipo=document.getElementById("tipo").value;
+let area=document.getElementById("area").value.trim();
+let monto=parseFloat(document.getElementById("monto").value);
+let pac=parseFloat(document.getElementById("pac").value);
+let postores=parseFloat(document.getElementById("postores").value);
+let desierto=document.getElementById("desierto").value;
+let mercado=document.getElementById("mercado").value;
+
+/* VALIDACIÓN */
+if(!nombre || !area || isNaN(monto) || isNaN(pac) || isNaN(postores)){
+alert("⚠️ Complete todos los campos");
+return;
+}
+
+if(monto<=0 || pac<=0){
+alert("⚠️ Montos inválidos");
+return;
+}
+
+let obj={
+codigo: editIndex?editIndex:generarID(),
+nombre,tipo,area,monto,pac,postores,desierto,mercado,
+fecha:new Date().toLocaleString()
+};
+
+actual=analizar(obj);
+
+/* LOCAL STORAGE */
+let data=JSON.parse(localStorage.getItem("db")||"[]");
+
+if(editIndex){
+data=data.map(d=>d.codigo===editIndex?actual:d);
+editIndex=null;
+}else{
+data.push(actual);
+}
+
+localStorage.setItem("db",JSON.stringify(data));
+
+mostrarResultado();
+render();
+
+/* LIMPIAR */
+document.getElementById("nombre").value="";
+document.getElementById("area").value="";
+document.getElementById("monto").value="";
+document.getElementById("pac").value="";
+document.getElementById("postores").value="";
+
+/* 🔥 GOOGLE SHEETS */
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
+method: "POST",
+body: JSON.stringify(actual)
+})
+.then(res => res.text())
+.then(data => {
+console.log("Sheets:", data);
+})
+.catch(err => {
+console.log("Error Sheets:", err);
+});
+
+}
+
+/* RESULTADO */
+function mostrarResultado(){
+
+document.getElementById("resultado").style.display="block";
+
+document.getElementById("resultado").innerHTML=`
+<b>RESULTADO DE SEGMENTACIÓN</b><br><br>
+Código: ${actual.codigo}<br>
+Procedimiento: ${actual.nombre}<br>
+Cuantía: ${actual.cuantia}<br>
+Riesgo: ${actual.riesgo}<br>
+Categoría: <b>${actual.categoria}</b><br>
+% PAC: ${actual.pct.toFixed(2)}%
+`;
+}
+
+/* EDITAR */
+function editar(cod){
+
+let data=JSON.parse(localStorage.getItem("db")||"[]");
+let d=data.find(x=>x.codigo===cod);
+
+document.getElementById("nombre").value=d.nombre;
+document.getElementById("tipo").value=d.tipo;
+document.getElementById("area").value=d.area;
+document.getElementById("monto").value=d.monto;
+document.getElementById("pac").value=d.pac;
+document.getElementById("postores").value=d.postores;
+document.getElementById("desierto").value=d.desierto;
+document.getElementById("mercado").value=d.mercado;
+
+editIndex=cod;
+}
+
+/* ELIMINAR */
+function eliminar(cod){
+
+let data=JSON.parse(localStorage.getItem("db")||"[]");
+data=data.filter(x=>x.codigo!==cod);
+
+localStorage.setItem("db",JSON.stringify(data));
+render();
+}
+
+/* PDF */
+function pdf(cod){
+
+let data=JSON.parse(localStorage.getItem("db")||"[]");
+let d=data.find(x=>x.codigo===cod);
+
+const {jsPDF}=window.jspdf;
+let doc=new jsPDF();
+
+let txt=`
+HOSPITAL NACIONAL ARZOBISPO LOAYZA
+OFICINA DE LOGÍSTICA / UNIDAD DE PROGRAMACIÓN
+
+Código: ${d.codigo}
+Procedimiento: ${d.nombre}
+Área: ${d.area}
+
+Monto: ${d.monto}
+PAC: ${d.pac}
+% PAC: ${d.pct.toFixed(2)}%
+
+Cuantía: ${d.cuantia}
+Riesgo: ${d.riesgo}
+Categoría: ${d.categoria}
+`;
+
+doc.text(doc.splitTextToSize(txt,180),10,20);
+doc.save(d.codigo+".pdf");
+}
+
+/* RENDER */
+function render(){
+
+let data=JSON.parse(localStorage.getItem("db")||"[]");
+
+let html="";
+
+data.forEach(d=>{
+html+=`
+<tr>
+<td>${d.codigo}</td>
+<td>${d.nombre}</td>
+<td>${d.categoria}</td>
+<td>
+<button class="btn-edit" onclick="editar('${d.codigo}')">Editar</button>
+<button class="btn-delete" onclick="eliminar('${d.codigo}')">Eliminar</button>
+<button class="btn-pdf" onclick="pdf('${d.codigo}')">PDF</button>
+</td>
+</tr>
+`;
+});
+
+document.getElementById("tabla").innerHTML=html;
+}
+
+render();
+
+</script>
+
+</body>
+</html>
