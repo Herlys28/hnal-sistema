@@ -185,193 +185,51 @@ Sistema de Segmentación Art. 125 - Ley N.° 32069
 
 <script>
 
-let editIndex=null;
-let actual=null;
+let editIndex = null;
+let actual = null;
 
 /* ID AUTOMÁTICO */
 function generarID(){
-let data=JSON.parse(localStorage.getItem("db")||"[]");
-return "HNAL-2026-"+String(data.length+1).padStart(4,"0");
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+return "HNAL-2026-" + String(data.length + 1).padStart(4, "0");
 }
 
 /* ANALIZAR */
 function analizar(obj){
 
-let pct=(obj.monto/obj.pac)*100;
+let pct = (obj.monto / obj.pac) * 100;
 
-let cuantia=pct>10?"ALTA CUANTÍA":"BAJA CUANTÍA";
+let cuantia = pct > 10 ? "ALTA CUANTÍA" : "BAJA CUANTÍA";
 
-let riesgo="BAJO RIESGO";
+let riesgo = "BAJO RIESGO";
 
 let condicion =
-(obj.desierto==="Si") ||
-(obj.mercado==="Si") ||
-(obj.tipo==="Bien" && obj.postores<=3) ||
-(obj.tipo==="Servicio" && obj.postores<=2);
+(obj.desierto === "Si") ||
+(obj.mercado === "Si") ||
+(obj.tipo === "Bien" && obj.postores <= 3) ||
+(obj.tipo === "Servicio" && obj.postores <= 2);
 
-if(condicion) riesgo="ALTO RIESGO";
+if(condicion) riesgo = "ALTO RIESGO";
 
-let categoria="";
+let categoria = "";
 
-if(cuantia==="BAJA CUANTÍA"&&riesgo==="BAJO RIESGO")categoria="RUTINARIO";
-if(cuantia==="ALTA CUANTÍA"&&riesgo==="BAJO RIESGO")categoria="OPERACIONAL";
-if(cuantia==="BAJA CUANTÍA"&&riesgo==="ALTO RIESGO")categoria="CRÍTICO";
-if(cuantia==="ALTA CUANTÍA"&&riesgo==="ALTO RIESGO")categoria="ESTRATÉGICO";
+if(cuantia==="BAJA CUANTÍA" && riesgo==="BAJO RIESGO") categoria="RUTINARIO";
+if(cuantia==="ALTA CUANTÍA" && riesgo==="BAJO RIESGO") categoria="OPERACIONAL";
+if(cuantia==="BAJA CUANTÍA" && riesgo==="ALTO RIESGO") categoria="CRÍTICO";
+if(cuantia==="ALTA CUANTÍA" && riesgo==="ALTO RIESGO") categoria="ESTRATÉGICO";
 
-return {...obj,pct,cuantia,riesgo,categoria};
-}
-
-/* REGISTRAR */
-function registrar(){
-
-let nombre=document.getElementById("nombre").value.trim();
-let tipo=document.getElementById("tipo").value;
-let area=document.getElementById("area").value.trim();
-let monto=parseFloat(document.getElementById("monto").value);
-let pac=parseFloat(document.getElementById("pac").value);
-let postores=parseFloat(document.getElementById("postores").value);
-let desierto=document.getElementById("desierto").value;
-let mercado=document.getElementById("mercado").value;
-
-/* VALIDACIÓN */
-if(!nombre || !area || isNaN(monto) || isNaN(pac) || isNaN(postores)){
-alert("⚠️ Complete todos los campos");
-return;
-}
-
-if(monto<=0 || pac<=0){
-alert("⚠️ Montos inválidos");
-return;
-}
-
-let obj={
-codigo: editIndex?editIndex:generarID(),
-nombre,tipo,area,monto,pac,postores,desierto,mercado,
-fecha:new Date().toLocaleString()
-};
-
-actual=analizar(obj);
-
-/* LOCAL STORAGE */
-let data=JSON.parse(localStorage.getItem("db")||"[]");
-
-if(editIndex){
-data=data.map(d=>d.codigo===editIndex?actual:d);
-editIndex=null;
-}else{
-data.push(actual);
-}
-
-localStorage.setItem("db",JSON.stringify(data));
-
-mostrarResultado();
-render();
-
-/* LIMPIAR */
-document.getElementById("nombre").value="";
-document.getElementById("area").value="";
-document.getElementById("monto").value="";
-document.getElementById("pac").value="";
-document.getElementById("postores").value="";
-
-/* 🔥 GOOGLE SHEETS */
-fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
-  method: "GET",
-  cache: "no-store"
-})
-.then(res => res.text())
-.then(data => {
-console.log("Sheets:", data);
-})
-.catch(err => {
-console.log("Error Sheets:", err);
-});
-
-}
-
-/* RESULTADO */
-function mostrarResultado(){
-
-document.getElementById("resultado").style.display="block";
-
-document.getElementById("resultado").innerHTML=`
-<b>RESULTADO DE SEGMENTACIÓN</b><br><br>
-Código: ${actual.codigo}<br>
-Procedimiento: ${actual.nombre}<br>
-Cuantía: ${actual.cuantia}<br>
-Riesgo: ${actual.riesgo}<br>
-Categoría: <b>${actual.categoria}</b><br>
-% PAC: ${actual.pct.toFixed(2)}%
-`;
-}
-
-/* EDITAR */
-function editar(cod){
-
-let data=JSON.parse(localStorage.getItem("db")||"[]");
-let d=data.find(x=>x.codigo===cod);
-
-document.getElementById("nombre").value=d.nombre;
-document.getElementById("tipo").value=d.tipo;
-document.getElementById("area").value=d.area;
-document.getElementById("monto").value=d.monto;
-document.getElementById("pac").value=d.pac;
-document.getElementById("postores").value=d.postores;
-document.getElementById("desierto").value=d.desierto;
-document.getElementById("mercado").value=d.mercado;
-
-editIndex=cod;
-}
-
-/* ELIMINAR */
-function eliminar(cod){
-
-let data=JSON.parse(localStorage.getItem("db")||"[]");
-data=data.filter(x=>x.codigo!==cod);
-
-localStorage.setItem("db",JSON.stringify(data));
-render();
-}
-
-/* PDF */
-function pdf(cod){
-
-let data=JSON.parse(localStorage.getItem("db")||"[]");
-let d=data.find(x=>x.codigo===cod);
-
-const {jsPDF}=window.jspdf;
-let doc=new jsPDF();
-
-let txt=`
-HOSPITAL NACIONAL ARZOBISPO LOAYZA
-OFICINA DE LOGÍSTICA / UNIDAD DE PROGRAMACIÓN
-
-Código: ${d.codigo}
-Procedimiento: ${d.nombre}
-Área: ${d.area}
-
-Monto: ${d.monto}
-PAC: ${d.pac}
-% PAC: ${d.pct.toFixed(2)}%
-
-Cuantía: ${d.cuantia}
-Riesgo: ${d.riesgo}
-Categoría: ${d.categoria}
-`;
-
-doc.text(doc.splitTextToSize(txt,180),10,20);
-doc.save(d.codigo+".pdf");
+return {...obj, pct, cuantia, riesgo, categoria};
 }
 
 /* RENDER */
 function render(){
 
-let data=JSON.parse(localStorage.getItem("db")||"[]");
+let data = JSON.parse(localStorage.getItem("db") || "[]");
 
-let html="";
+let html = "";
 
 data.forEach(d=>{
-html+=`
+html += `
 <tr>
 <td>${d.codigo}</td>
 <td>${d.nombre}</td>
@@ -385,10 +243,164 @@ html+=`
 `;
 });
 
-document.getElementById("tabla").innerHTML=html;
+document.getElementById("tabla").innerHTML = html;
 }
 
+/* CARGAR DESDE SHEETS (IMPORTANTE) */
+function cargarDesdeSheets(){
+
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec")
+.then(r => r.json())
+.then(data => {
+
+localStorage.setItem("db", JSON.stringify(data || []));
 render();
+
+})
+.catch(err => {
+console.log("Error cargando Sheets:", err);
+render();
+});
+
+}
+
+/* REGISTRAR */
+function registrar(){
+
+let nombre = document.getElementById("nombre").value.trim();
+let tipo = document.getElementById("tipo").value;
+let area = document.getElementById("area").value.trim();
+let monto = parseFloat(document.getElementById("monto").value);
+let pac = parseFloat(document.getElementById("pac").value);
+let postores = parseFloat(document.getElementById("postores").value);
+let desierto = document.getElementById("desierto").value;
+let mercado = document.getElementById("mercado").value;
+
+if(!nombre || !area || isNaN(monto) || isNaN(pac) || isNaN(postores)){
+alert("⚠️ Complete todos los campos");
+return;
+}
+
+if(monto <= 0 || pac <= 0){
+alert("⚠️ Montos inválidos");
+return;
+}
+
+let obj = {
+codigo: editIndex ? editIndex : generarID(),
+nombre, tipo, area, monto, pac, postores, desierto, mercado,
+fecha: new Date().toLocaleString()
+};
+
+actual = analizar(obj);
+
+/* LOCAL STORAGE */
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+
+if(editIndex){
+data = data.map(d => d.codigo === editIndex ? actual : d);
+editIndex = null;
+}else{
+data.push(actual);
+}
+
+localStorage.setItem("db", JSON.stringify(data));
+
+mostrarResultado();
+render();
+
+/* LIMPIAR */
+document.getElementById("nombre").value = "";
+document.getElementById("area").value = "";
+document.getElementById("monto").value = "";
+document.getElementById("pac").value = "";
+document.getElementById("postores").value = "";
+
+/* GOOGLE SHEETS */
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
+method: "POST",
+body: JSON.stringify(actual)
+})
+.then(res => res.json())
+.then(data => console.log("Guardado:", data))
+.catch(err => console.log(err));
+
+}
+
+/* RESULTADO */
+function mostrarResultado(){
+
+document.getElementById("resultado").style.display = "block";
+
+document.getElementById("resultado").innerHTML = `
+<b>RESULTADO DE SEGMENTACIÓN</b><br><br>
+Código: ${actual.codigo}<br>
+Procedimiento: ${actual.nombre}<br>
+Cuantía: ${actual.cuantia}<br>
+Riesgo: ${actual.riesgo}<br>
+Categoría: <b>${actual.categoria}</b><br>
+% PAC: ${actual.pct.toFixed(2)}%
+`;
+}
+
+/* EDITAR */
+function editar(cod){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+let d = data.find(x => x.codigo === cod);
+
+document.getElementById("nombre").value = d.nombre;
+document.getElementById("tipo").value = d.tipo;
+document.getElementById("area").value = d.area;
+document.getElementById("monto").value = d.monto;
+document.getElementById("pac").value = d.pac;
+document.getElementById("postores").value = d.postores;
+document.getElementById("desierto").value = d.desierto;
+document.getElementById("mercado").value = d.mercado;
+
+editIndex = cod;
+}
+
+/* ELIMINAR */
+function eliminar(cod){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+data = data.filter(x => x.codigo !== cod);
+
+localStorage.setItem("db", JSON.stringify(data));
+render();
+}
+
+/* PDF */
+function pdf(cod){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+let d = data.find(x => x.codigo === cod);
+
+const { jsPDF } = window.jspdf;
+let doc = new jsPDF();
+
+let txt = `
+HOSPITAL NACIONAL ARZOBISPO LOAYZA
+
+Código: ${d.codigo}
+Procedimiento: ${d.nombre}
+Área: ${d.area}
+Monto: ${d.monto}
+PAC: ${d.pac}
+% PAC: ${d.pct.toFixed(2)}%
+Cuantía: ${d.cuantia}
+Riesgo: ${d.riesgo}
+Categoría: ${d.categoria}
+`;
+
+doc.text(doc.splitTextToSize(txt, 180), 10, 20);
+doc.save(d.codigo + ".pdf");
+}
+
+/* 🔥 INICIO CORRECTO */
+render();
+cargarDesdeSheets();
 
 </script>
 
