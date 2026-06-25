@@ -7,7 +7,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-
 body{
 margin:0;
 font-family:Segoe UI, Arial;
@@ -104,7 +103,6 @@ border-bottom:1px solid #eee;
 display:flex;
 gap:6px;
 }
-
 </style>
 </head>
 
@@ -128,6 +126,7 @@ Sistema de Segmentación Art. 125 - Ley N.° 32069
 <div class="grid">
 
 <input id="nombre" placeholder="Nombre del procedimiento">
+
 <select id="tipo">
 <option>Bien</option>
 <option>Servicio</option>
@@ -162,7 +161,7 @@ Sistema de Segmentación Art. 125 - Ley N.° 32069
 <h3>Historial de Contrataciones</h3>
 
 <div style="margin-bottom:10px;">
-<button class="btn-primary" onclick="exportExcel()" style="background:#1b8a3b;">
+<button class="btn-primary" onclick="exportCSV()" style="background:#1b8a3b;">
 📥 Descargar Excel (CSV)
 </button>
 </div>
@@ -189,18 +188,19 @@ let editIndex = null;
 let actual = null;
 
 /* =========================
-   GENERAR ID (opcional local)
+   ID
 ========================= */
 function generarID(){
-return "HNAL-" + new Date().getFullYear() + "-" + Math.floor(Math.random()*100000);
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+return "HNAL-2026-" + String(data.length + 1).padStart(4, "0");
 }
 
 /* =========================
-   ANALIZAR
+   ANALISIS
 ========================= */
 function analizar(obj){
 
-let pct = (obj.monto / obj.pac) * 100;
+let pct = obj.pac > 0 ? (obj.monto / obj.pac) * 100 : 0;
 
 let cuantia = pct > 10 ? "ALTA CUANTÍA" : "BAJA CUANTÍA";
 
@@ -214,33 +214,14 @@ let condicion =
 
 if(condicion) riesgo = "ALTO RIESGO";
 
-let categoria =
-(cuantia==="BAJA CUANTÍA" && riesgo==="BAJO RIESGO") ? "RUTINARIO" :
-(cuantia==="ALTA CUANTÍA" && riesgo==="BAJO RIESGO") ? "OPERACIONAL" :
-(cuantia==="BAJA CUANTÍA" && riesgo==="ALTO RIESGO") ? "CRÍTICO" :
-"ESTRATÉGICO";
+let categoria = "";
+
+if(cuantia==="BAJA CUANTÍA" && riesgo==="BAJO RIESGO") categoria="RUTINARIO";
+if(cuantia==="ALTA CUANTÍA" && riesgo==="BAJO RIESGO") categoria="OPERACIONAL";
+if(cuantia==="BAJA CUANTÍA" && riesgo==="ALTO RIESGO") categoria="CRÍTICO";
+if(cuantia==="ALTA CUANTÍA" && riesgo==="ALTO RIESGO") categoria="ESTRATÉGICO";
 
 return {...obj, pct, cuantia, riesgo, categoria};
-}
-
-/* =========================
-   CARGAR DESDE SHEETS
-========================= */
-function cargarDatos(){
-
-fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec")
-.then(r => r.json())
-.then(data => {
-
-window.datosGlobal = data || [];
-render(data);
-
-})
-.catch(err => {
-console.log("Error Sheets:", err);
-render([]);
-});
-
 }
 
 /* =========================
@@ -248,7 +229,7 @@ render([]);
 ========================= */
 function render(data){
 
-if(!data) data = window.datosGlobal || [];
+data = data || [];
 
 let html = "";
 
@@ -271,7 +252,24 @@ document.getElementById("tabla").innerHTML = html;
 }
 
 /* =========================
-   REGISTRAR (SOLO SHEETS)
+   CARGAR DATOS SHEETS
+========================= */
+function cargarDatos(){
+
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec")
+.then(r => r.json())
+.then(data => {
+window.datosGlobal = data || [];
+render(data);
+})
+.catch(() => {
+let local = JSON.parse(localStorage.getItem("db") || "[]");
+render(local);
+});
+}
+
+/* =========================
+   REGISTRAR
 ========================= */
 function registrar(){
 
@@ -285,40 +283,47 @@ let desierto = document.getElementById("desierto").value;
 let mercado = document.getElementById("mercado").value;
 
 if(!nombre || !area || isNaN(monto) || isNaN(pac) || isNaN(postores)){
-alert("⚠️ Complete todos los campos");
+alert("Complete todos los campos");
 return;
 }
 
 let obj = {
+codigo: editIndex ? editIndex : generarID(),
 nombre, tipo, area, monto, pac, postores, desierto, mercado,
 fecha: new Date().toLocaleString()
 };
 
 actual = analizar(obj);
 
-/* ENVIAR A SHEETS */
-fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
-method: "POST",
-headers: {
-  "Content-Type": "application/json"
-},
-body: JSON.stringify(actual)
-})
-.then(res => res.json())
-.then(() => {
+/* LOCAL STORAGE */
+let data = JSON.parse(localStorage.getItem("db") || "[]");
 
+if(editIndex){
+data = data.map(d => d.codigo === editIndex ? actual : d);
+editIndex = null;
+}else{
+data.push(actual);
+}
+
+localStorage.setItem("db", JSON.stringify(data));
+
+/* UI */
 mostrarResultado();
-cargarDatos();
+render(data);
 
-})
-.catch(err => console.log("Error:", err));
-
-/* LIMPIAR */
+/* limpiar */
 document.getElementById("nombre").value = "";
 document.getElementById("area").value = "";
 document.getElementById("monto").value = "";
 document.getElementById("pac").value = "";
 document.getElementById("postores").value = "";
+
+/* Sheets */
+fetch("URL_APPS_SCRIPT", {
+method: "POST",
+headers: {"Content-Type":"application/json"},
+body: JSON.stringify(actual)
+}).catch(()=>{});
 }
 
 /* =========================
@@ -340,12 +345,48 @@ Categoría: <b>${actual.categoria}</b><br>
 }
 
 /* =========================
+   EDITAR
+========================= */
+function editar(cod){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+let d = data.find(x => x.codigo === cod);
+
+if(!d) return;
+
+document.getElementById("nombre").value = d.nombre;
+document.getElementById("tipo").value = d.tipo;
+document.getElementById("area").value = d.area;
+document.getElementById("monto").value = d.monto;
+document.getElementById("pac").value = d.pac;
+document.getElementById("postores").value = d.postores;
+document.getElementById("desierto").value = d.desierto;
+document.getElementById("mercado").value = d.mercado;
+
+editIndex = cod;
+}
+
+/* =========================
+   ELIMINAR
+========================= */
+function eliminar(cod){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+data = data.filter(x => x.codigo !== cod);
+
+localStorage.setItem("db", JSON.stringify(data));
+render(data);
+}
+
+/* =========================
    PDF
 ========================= */
 function pdf(cod){
 
-let data = window.datosGlobal || [];
+let data = JSON.parse(localStorage.getItem("db") || "[]");
 let d = data.find(x => x.codigo === cod);
+
+if(!d) return;
 
 const { jsPDF } = window.jspdf;
 let doc = new jsPDF();
@@ -369,8 +410,31 @@ doc.save(d.codigo + ".pdf");
 }
 
 /* =========================
-   INICIO
+   CSV EXPORT
 ========================= */
+function exportCSV(){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+
+let csv = "codigo,nombre,categoria\n";
+data.forEach(d=>{
+csv += `${d.codigo},${d.nombre},${d.categoria}\n`;
+});
+
+let blob = new Blob([csv], {type:"text/csv"});
+let url = URL.createObjectURL(blob);
+
+let a = document.createElement("a");
+a.href = url;
+a.download = "contrataciones.csv";
+a.click();
+}
+
+/* =========================
+   INIT
+========================= */
+let local = JSON.parse(localStorage.getItem("db") || "[]");
+render(local);
 cargarDatos();
 
 </script>
