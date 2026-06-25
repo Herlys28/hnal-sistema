@@ -252,7 +252,7 @@ document.getElementById("tabla").innerHTML = html;
 }
 
 /* =========================
-   CARGAR DATOS SHEETS
+   CARGAR DESDE SHEETS
 ========================= */
 function cargarDatos(){
 
@@ -262,14 +262,14 @@ fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA
 window.datosGlobal = data || [];
 render(data);
 })
-.catch(() => {
-let local = JSON.parse(localStorage.getItem("db") || "[]");
-render(local);
+.catch(err => {
+console.log("Error Sheets:", err);
+render([]);
 });
 }
 
 /* =========================
-   REGISTRAR
+   REGISTRAR (FIX FINAL)
 ========================= */
 function registrar(){
 
@@ -295,7 +295,7 @@ fecha: new Date().toLocaleString()
 
 actual = analizar(obj);
 
-/* LOCAL STORAGE */
+/* LOCAL STORAGE (opcional, solo cache) */
 let data = JSON.parse(localStorage.getItem("db") || "[]");
 
 if(editIndex){
@@ -307,23 +307,31 @@ data.push(actual);
 
 localStorage.setItem("db", JSON.stringify(data));
 
-/* UI */
-mostrarResultado();
 render(data);
 
-/* limpiar */
+/* LIMPIAR */
 document.getElementById("nombre").value = "";
 document.getElementById("area").value = "";
 document.getElementById("monto").value = "";
 document.getElementById("pac").value = "";
 document.getElementById("postores").value = "";
 
-/* Sheets */
-fetch("URL_APPS_SCRIPT", {
-method: "POST",
-headers: {"Content-Type":"application/json"},
-body: JSON.stringify(actual)
-}).catch(()=>{});
+/* =========================
+   ENVIAR A SHEETS (CORRECTO)
+========================= */
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(actual)
+})
+.then(res => res.text())
+.then(resp => {
+  console.log("Guardado:", resp);
+  cargarDatos();
+})
+.catch(err => console.log("Error Sheets:", err));
 }
 
 /* =========================
@@ -410,31 +418,8 @@ doc.save(d.codigo + ".pdf");
 }
 
 /* =========================
-   CSV EXPORT
-========================= */
-function exportCSV(){
-
-let data = JSON.parse(localStorage.getItem("db") || "[]");
-
-let csv = "codigo,nombre,categoria\n";
-data.forEach(d=>{
-csv += `${d.codigo},${d.nombre},${d.categoria}\n`;
-});
-
-let blob = new Blob([csv], {type:"text/csv"});
-let url = URL.createObjectURL(blob);
-
-let a = document.createElement("a");
-a.href = url;
-a.download = "contrataciones.csv";
-a.click();
-}
-
-/* =========================
    INIT
 ========================= */
-let local = JSON.parse(localStorage.getItem("db") || "[]");
-render(local);
 cargarDatos();
 
 </script>
