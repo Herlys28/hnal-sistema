@@ -188,13 +188,16 @@ Sistema de Segmentación Art. 125 - Ley N.° 32069
 let editIndex = null;
 let actual = null;
 
-/* ID AUTOMÁTICO */
+/* =========================
+   GENERAR ID (opcional local)
+========================= */
 function generarID(){
-let data = JSON.parse(localStorage.getItem("db") || "[]");
-return "HNAL-2026-" + String(data.length + 1).padStart(4, "0");
+return "HNAL-" + new Date().getFullYear() + "-" + Math.floor(Math.random()*100000);
 }
 
-/* ANALIZAR */
+/* =========================
+   ANALIZAR
+========================= */
 function analizar(obj){
 
 let pct = (obj.monto / obj.pac) * 100;
@@ -211,20 +214,41 @@ let condicion =
 
 if(condicion) riesgo = "ALTO RIESGO";
 
-let categoria = "";
-
-if(cuantia==="BAJA CUANTÍA" && riesgo==="BAJO RIESGO") categoria="RUTINARIO";
-if(cuantia==="ALTA CUANTÍA" && riesgo==="BAJO RIESGO") categoria="OPERACIONAL";
-if(cuantia==="BAJA CUANTÍA" && riesgo==="ALTO RIESGO") categoria="CRÍTICO";
-if(cuantia==="ALTA CUANTÍA" && riesgo==="ALTO RIESGO") categoria="ESTRATÉGICO";
+let categoria =
+(cuantia==="BAJA CUANTÍA" && riesgo==="BAJO RIESGO") ? "RUTINARIO" :
+(cuantia==="ALTA CUANTÍA" && riesgo==="BAJO RIESGO") ? "OPERACIONAL" :
+(cuantia==="BAJA CUANTÍA" && riesgo==="ALTO RIESGO") ? "CRÍTICO" :
+"ESTRATÉGICO";
 
 return {...obj, pct, cuantia, riesgo, categoria};
 }
 
-/* RENDER */
-function render(){
+/* =========================
+   CARGAR DESDE SHEETS
+========================= */
+function cargarDatos(){
 
-let data = JSON.parse(localStorage.getItem("db") || "[]");
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec")
+.then(r => r.json())
+.then(data => {
+
+window.datosGlobal = data || [];
+render(data);
+
+})
+.catch(err => {
+console.log("Error Sheets:", err);
+render([]);
+});
+
+}
+
+/* =========================
+   RENDER
+========================= */
+function render(data){
+
+if(!data) data = window.datosGlobal || [];
 
 let html = "";
 
@@ -246,25 +270,9 @@ html += `
 document.getElementById("tabla").innerHTML = html;
 }
 
-/* CARGAR DESDE SHEETS (IMPORTANTE) */
-function cargarDesdeSheets(){
-
-fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec")
-.then(r => r.json())
-.then(data => {
-
-localStorage.setItem("db", JSON.stringify(data || []));
-render();
-
-})
-.catch(err => {
-console.log("Error cargando Sheets:", err);
-render();
-});
-
-}
-
-/* REGISTRAR */
+/* =========================
+   REGISTRAR (SOLO SHEETS)
+========================= */
 function registrar(){
 
 let nombre = document.getElementById("nombre").value.trim();
@@ -281,33 +289,29 @@ alert("⚠️ Complete todos los campos");
 return;
 }
 
-if(monto <= 0 || pac <= 0){
-alert("⚠️ Montos inválidos");
-return;
-}
-
 let obj = {
-codigo: editIndex ? editIndex : generarID(),
 nombre, tipo, area, monto, pac, postores, desierto, mercado,
 fecha: new Date().toLocaleString()
 };
 
 actual = analizar(obj);
 
-/* LOCAL STORAGE */
-let data = JSON.parse(localStorage.getItem("db") || "[]");
-
-if(editIndex){
-data = data.map(d => d.codigo === editIndex ? actual : d);
-editIndex = null;
-}else{
-data.push(actual);
-}
-
-localStorage.setItem("db", JSON.stringify(data));
+/* ENVIAR A SHEETS */
+fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
+method: "POST",
+headers: {
+  "Content-Type": "application/json"
+},
+body: JSON.stringify(actual)
+})
+.then(res => res.json())
+.then(() => {
 
 mostrarResultado();
-render();
+cargarDatos();
+
+})
+.catch(err => console.log("Error:", err));
 
 /* LIMPIAR */
 document.getElementById("nombre").value = "";
@@ -315,19 +319,11 @@ document.getElementById("area").value = "";
 document.getElementById("monto").value = "";
 document.getElementById("pac").value = "";
 document.getElementById("postores").value = "";
-
-/* GOOGLE SHEETS */
-fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
-method: "POST",
-body: JSON.stringify(actual)
-})
-.then(res => res.json())
-.then(data => console.log("Guardado:", data))
-.catch(err => console.log(err));
-
 }
 
-/* RESULTADO */
+/* =========================
+   RESULTADO
+========================= */
 function mostrarResultado(){
 
 document.getElementById("resultado").style.display = "block";
@@ -343,38 +339,12 @@ Categoría: <b>${actual.categoria}</b><br>
 `;
 }
 
-/* EDITAR */
-function editar(cod){
-
-let data = JSON.parse(localStorage.getItem("db") || "[]");
-let d = data.find(x => x.codigo === cod);
-
-document.getElementById("nombre").value = d.nombre;
-document.getElementById("tipo").value = d.tipo;
-document.getElementById("area").value = d.area;
-document.getElementById("monto").value = d.monto;
-document.getElementById("pac").value = d.pac;
-document.getElementById("postores").value = d.postores;
-document.getElementById("desierto").value = d.desierto;
-document.getElementById("mercado").value = d.mercado;
-
-editIndex = cod;
-}
-
-/* ELIMINAR */
-function eliminar(cod){
-
-let data = JSON.parse(localStorage.getItem("db") || "[]");
-data = data.filter(x => x.codigo !== cod);
-
-localStorage.setItem("db", JSON.stringify(data));
-render();
-}
-
-/* PDF */
+/* =========================
+   PDF
+========================= */
 function pdf(cod){
 
-let data = JSON.parse(localStorage.getItem("db") || "[]");
+let data = window.datosGlobal || [];
 let d = data.find(x => x.codigo === cod);
 
 const { jsPDF } = window.jspdf;
@@ -398,9 +368,10 @@ doc.text(doc.splitTextToSize(txt, 180), 10, 20);
 doc.save(d.codigo + ".pdf");
 }
 
-/* 🔥 INICIO CORRECTO */
-render();
-cargarDesdeSheets();
+/* =========================
+   INICIO
+========================= */
+cargarDatos();
 
 </script>
 
