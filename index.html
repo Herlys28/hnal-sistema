@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>HNAL - Sistema PRO Completo</title>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script> src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 body{
@@ -252,24 +252,34 @@ document.getElementById("tabla").innerHTML = html;
 }
 
 /* =========================
-   CARGAR DESDE SHEETS
+   CARGAR DATOS SHEETS
 ========================= */
 function cargarDatos(){
 
 fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec")
-.then(r => r.json())
-.then(data => {
-window.datosGlobal = data || [];
-render(data);
+.then(r => r.text())
+.then(text => {
+
+  try {
+    const data = JSON.parse(text);
+    window.datosGlobal = data || [];
+    render(data);
+  } catch (e) {
+    console.error("Error parsing JSON:", text);
+    let local = JSON.parse(localStorage.getItem("db") || "[]");
+    render(local);
+  }
+
 })
-.catch(err => {
-console.log("Error Sheets:", err);
-render([]);
+.catch(() => {
+  let local = JSON.parse(localStorage.getItem("db") || "[]");
+  render(local);
 });
+
 }
 
 /* =========================
-   REGISTRAR (FIX FINAL)
+   REGISTRAR
 ========================= */
 function registrar(){
 
@@ -295,7 +305,7 @@ fecha: new Date().toLocaleString()
 
 actual = analizar(obj);
 
-/* LOCAL STORAGE (opcional, solo cache) */
+/* LOCAL STORAGE */
 let data = JSON.parse(localStorage.getItem("db") || "[]");
 
 if(editIndex){
@@ -307,32 +317,44 @@ data.push(actual);
 
 localStorage.setItem("db", JSON.stringify(data));
 
+/* UI */
+mostrarResultado();
 render(data);
 
-/* LIMPIAR */
+/* limpiar */
 document.getElementById("nombre").value = "";
 document.getElementById("area").value = "";
 document.getElementById("monto").value = "";
 document.getElementById("pac").value = "";
 document.getElementById("postores").value = "";
 
-/* =========================
-   ENVIAR A SHEETS (CORRECTO)
-========================= */
+/* Sheets */
 fetch("https://script.google.com/macros/s/AKfycbz6qU5DzYfnsEJwGRGZfBTBtB9Kj2PodA7IOlWVW51vcXO8GNfL9TgFYwWHi-WReb7J7A/exec", {
   method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
   body: JSON.stringify(actual)
 })
-.then(res => res.text())
-.then(resp => {
-  console.log("Guardado:", resp);
-  cargarDatos();
+.then(r => r.text())
+.then(res => {
+  console.log("RESPUESTA RAW:", res);
+
+  try {
+    const json = JSON.parse(res);
+
+    console.log("Sheets OK:", json);
+
+    if (!json.ok) {
+      console.error("Error backend:", json.error);
+    }
+
+  } catch (e) {
+    console.error("Respuesta no es JSON válido:", res);
+  }
+
 })
-.catch(err => console.log("Error Sheets:", err));
-}
+.catch(err => {
+  console.error("Error Sheets:", err);
+});
+} // 🔥 CIERRE CORRECTO DE registrar()
 
 /* =========================
    RESULTADO
@@ -418,8 +440,31 @@ doc.save(d.codigo + ".pdf");
 }
 
 /* =========================
+   CSV EXPORT
+========================= */
+function exportCSV(){
+
+let data = JSON.parse(localStorage.getItem("db") || "[]");
+
+let csv = "codigo,nombre,categoria\n";
+data.forEach(d=>{
+csv += `${d.codigo},${d.nombre},${d.categoria}\n`;
+});
+
+let blob = new Blob([csv], {type:"text/csv"});
+let url = URL.createObjectURL(blob);
+
+let a = document.createElement("a");
+a.href = url;
+a.download = "contrataciones.csv";
+a.click();
+}
+
+/* =========================
    INIT
 ========================= */
+let local = JSON.parse(localStorage.getItem("db") || "[]");
+render(local);
 cargarDatos();
 
 </script>
